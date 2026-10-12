@@ -78,6 +78,13 @@ pipeline {
         '''
       }
     }
+
+stage('Controlled Failure') {
+  steps {
+    echo 'Simulating a deployment failure for rollback testing'
+    sh 'exit 1'
+  }
+}
   }
 
   post {
