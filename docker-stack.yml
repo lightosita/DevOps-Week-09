@@ -1,0 +1,13 @@
+services:
+  web:
+    image: lightosita/week9-app:${IMAGE_TAG}
+    ports:
+      - "8090:3000"
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        monitor: 20s
+        failure_action: rollback
