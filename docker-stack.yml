@@ -11,3 +11,20 @@ services:
         order: start-first
         monitor: 20s
         failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        order: start-first
+        monitor: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          cpus: "0.10"
+          memory: 64M

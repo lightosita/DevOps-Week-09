@@ -1,12 +1,23 @@
 pipeline {
   agent any
 
+  options {
+    timeout(time: 20, unit: 'MINUTES')
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+  }
+
+  parameters {
+    booleanParam(name: 'SIMULATE_FAILURE', defaultValue: false, description: 'Force a failure after Verify to demo the automatic rollback')
+  }
+
   environment {
     IMAGE_NAME = 'lightosita/week9-app'
     IMAGE_TAG  = "${env.BUILD_NUMBER}"
     CREDS      = credentials('dockerhub-creds')
     STACK      = 'week9'
     SERVICE    = 'week9_web'
+    TRIVY      = 'aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222'
   }
 
   stages {
@@ -36,6 +47,22 @@ pipeline {
     stage('Package') {
       steps {
         sh 'docker build --build-arg APP_VERSION=$IMAGE_TAG -t $IMAGE_NAME:$IMAGE_TAG -t $IMAGE_NAME:latest .'
+      }
+    }
+
+    stage('Security Scan') {
+      steps {
+        sh '''
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ $TRIVY \
+            image --no-progress --severity HIGH,CRITICAL --exit-code 0 $IMAGE_NAME:$IMAGE_TAG > trivy-report.txt
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ $TRIVY \
+            image --no-progress --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $IMAGE_NAME:$IMAGE_TAG
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+        }
       }
     }
 
@@ -79,12 +106,15 @@ pipeline {
       }
     }
 
-stage('Controlled Failure') {
-  steps {
-    echo 'Simulating a deployment failure for rollback testing'
-    sh 'exit 1'
-  }
-}
+    stage('Controlled Failure') {
+      when {
+        expression { params.SIMULATE_FAILURE }
+      }
+      steps {
+        echo 'Simulating a deployment failure for rollback testing'
+        sh 'exit 1'
+      }
+    }
   }
 
   post {
